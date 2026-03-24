@@ -73,35 +73,41 @@ def load_history_records(base_url: str = DEFAULT_HISTORY_URL, draw_count: int | 
     estimated_pages = max(3, int(math.ceil(requested_draws / 30.0))) if requested_draws else MAX_HISTORY_PAGES
     parsed_rows: list[DrawRecord] = []
     seen_serials: set[str] = set()
-    try:
-        for page in range(1, estimated_pages + 1):
+    for page in range(1, estimated_pages + 1):
+        try:
             logger.info("fetching history page %s", page)
             html = fetch_text(base_url.format(page=page))
-            page_rows = parse_history_rows(html)
-            if not page_rows:
+        except HTTPError as exc:
+            if exc.code == 404 and parsed_rows:
+                logger.info("history page %s returned 404, treating it as the end of pagination", page)
                 break
-            new_count = 0
-            for row in page_rows:
-                serial = row["serial"]
-                if serial in seen_serials:
-                    continue
-                seen_serials.add(serial)
-                parsed_rows.append(
-                    DrawRecord(
-                        serial=serial,
-                        draw_date=row["date"],
-                        red=list(row["red"]),
-                        blue=row["blue"],
-                    )
+            raise RuntimeError("failed to fetch lottery data from %s: %s" % (base_url, exc)) from exc
+        except URLError as exc:
+            raise RuntimeError("failed to fetch lottery data from %s: %s" % (base_url, exc)) from exc
+
+        page_rows = parse_history_rows(html)
+        if not page_rows:
+            break
+        new_count = 0
+        for row in page_rows:
+            serial = row["serial"]
+            if serial in seen_serials:
+                continue
+            seen_serials.add(serial)
+            parsed_rows.append(
+                DrawRecord(
+                    serial=serial,
+                    draw_date=row["date"],
+                    red=list(row["red"]),
+                    blue=row["blue"],
                 )
-                new_count += 1
-            logger.info("parsed %s new rows from page %s", new_count, page)
-            if new_count == 0:
-                break
-            if requested_draws and len(parsed_rows) >= requested_draws:
-                break
-    except (HTTPError, URLError) as exc:
-        raise RuntimeError("failed to fetch lottery data from %s: %s" % (base_url, exc)) from exc
+            )
+            new_count += 1
+        logger.info("parsed %s new rows from page %s", new_count, page)
+        if new_count == 0:
+            break
+        if requested_draws and len(parsed_rows) >= requested_draws:
+            break
 
     return parsed_rows
 

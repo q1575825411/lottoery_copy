@@ -1,6 +1,9 @@
 import unittest
+from io import BytesIO
+from unittest.mock import patch
+from urllib.error import HTTPError
 
-from lotto_app.fetcher import parse_history_rows
+from lotto_app.fetcher import load_history_records, parse_history_rows
 
 
 SAMPLE_HTML = """
@@ -39,6 +42,24 @@ class ParseHistoryRowsTests(unittest.TestCase):
     def test_parse_history_rows_raises_when_table_missing(self):
         with self.assertRaises(RuntimeError):
             parse_history_rows("<html><body>missing</body></html>")
+
+    def test_load_history_records_stops_on_404_after_data(self):
+        responses = {
+            "https://example.test/history?page=1": SAMPLE_HTML,
+            "https://example.test/history?page=2": SAMPLE_HTML.replace("2026031", "2026030"),
+        }
+
+        def fake_fetch(url: str) -> str:
+            if url in responses:
+                return responses[url]
+            raise HTTPError(url, 404, "Not Found", hdrs=None, fp=BytesIO(b""))
+
+        with patch("lotto_app.fetcher.fetch_text", side_effect=fake_fetch):
+            rows = load_history_records("https://example.test/history?page={page}")
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual("2026031", rows[0].serial)
+        self.assertEqual("2026030", rows[1].serial)
 
 
 if __name__ == "__main__":
