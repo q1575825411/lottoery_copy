@@ -1,0 +1,9 @@
+[project]
+name = "lottoery-copy"
+version = "0.1.0"
+description = "SSQ history fetcher and Excel analyzer"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
