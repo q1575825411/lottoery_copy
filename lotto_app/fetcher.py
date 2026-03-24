@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import logging
 import re
+import socket
+import time
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -11,6 +13,9 @@ from .constants import DEFAULT_HISTORY_URL, MAX_DRAWS, MAX_HISTORY_PAGES, RED_BA
 from .state import LottoState
 
 logger = logging.getLogger(__name__)
+DEFAULT_FETCH_TIMEOUT = 30
+DEFAULT_FETCH_RETRIES = 3
+DEFAULT_FETCH_RETRY_DELAY = 1.0
 
 
 @dataclass(frozen=True)
@@ -21,7 +26,13 @@ class DrawRecord:
     blue: int
 
 
-def fetch_text(url: str) -> str:
+def fetch_text(
+    url: str,
+    *,
+    timeout: int = DEFAULT_FETCH_TIMEOUT,
+    retries: int = DEFAULT_FETCH_RETRIES,
+    retry_delay: float = DEFAULT_FETCH_RETRY_DELAY,
+) -> str:
     request = Request(
         url,
         headers={
@@ -29,8 +40,30 @@ def fetch_text(url: str) -> str:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         },
     )
-    with urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8", errors="ignore")
+    last_error: Exception | None = None
+    total_attempts = max(1, retries)
+    for attempt in range(1, total_attempts + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return response.read().decode("utf-8", errors="ignore")
+        except HTTPError:
+            raise
+        except (TimeoutError, socket.timeout, URLError) as exc:
+            last_error = exc
+            if attempt >= total_attempts:
+                break
+            logger.warning(
+                "fetch attempt %s/%s failed for %s: %s; retrying in %.1fs",
+                attempt,
+                total_attempts,
+                url,
+                exc,
+                retry_delay,
+            )
+            time.sleep(retry_delay)
+
+    assert last_error is not None
+    raise last_error
 
 
 def strip_tags(value: str) -> str:
@@ -82,7 +115,7 @@ def load_history_records(base_url: str = DEFAULT_HISTORY_URL, draw_count: int | 
                 logger.info("history page %s returned 404, treating it as the end of pagination", page)
                 break
             raise RuntimeError("failed to fetch lottery data from %s: %s" % (base_url, exc)) from exc
-        except URLError as exc:
+        except (TimeoutError, socket.timeout, URLError) as exc:
             raise RuntimeError("failed to fetch lottery data from %s: %s" % (base_url, exc)) from exc
 
         page_rows = parse_history_rows(html)

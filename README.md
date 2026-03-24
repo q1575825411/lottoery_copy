@@ -15,7 +15,9 @@ Using Gail Howard's methord to count the double color balls.
 ```text
 .
 ├── data/
-│   └── data.xlsx
+│   ├── data.xlsx
+│   ├── history_cache.json
+│   └── pipeline_state.json
 ├── lotto_app/
 │   ├── cli.py
 │   ├── fetcher.py
@@ -47,6 +49,8 @@ Using Gail Howard's methord to count the double color balls.
 - `tests/` 存放最小回归测试
 - `scripts/` 存放执行脚本
 - 根目录 `run.sh` 只是兼容入口，实际转发到 `scripts/run.sh`
+- `data/history_cache.json` 缓存历史开奖数据，首次全量抓取，后续仅同步增量
+- `data/pipeline_state.json` 记录第一阶段导出的输入签名，数据和参数未变化时跳过重算
 - `data/sample_features.csv` 是第一阶段生成的特征样本表
 - `data/rule_effectiveness.csv` 是第一阶段生成的规则有效性报表
 - `data/model_ranking.csv` 是基于简单 Logistic Regression 的最新一期号码排序结果
@@ -122,6 +126,9 @@ python -m unittest discover -s tests
 - `--draws` 必须大于等于 `100`，因为现有统计逻辑固定依赖最近 100 期数据。
 - `--full-history-draws 0` 表示特征和回测使用全量历史；非 0 时使用指定条数。
 - 数据抓取现在依赖东方财富的历史开奖页；如果上游页面结构变化，脚本会直接报错退出。
+- 历史开奖会缓存到 `data/history_cache.json`；首次运行全量抓取，后续运行只抓取新期次。
+- 第一阶段导出会根据缓存数据和滚动参数计算输入签名；如果历史数据和参数都没变化，则直接复用已有 csv，不重复回测和训练。
+- `data.xlsx` 也会根据最近 `--draws` 期数据计算签名；最近期数据未变化时直接复用已有工作簿，不重复生成。
 - Excel 中新增了 `原始数据` 工作表，用于保存最近 100 期原始开奖明细，便于人工核对。
 - `sample_features.csv` 采用“每期、每号一行”的结构，并包含 `y_1 / y_3 / y_5` 标签。
 - `sample_features.csv` 同时包含原有经验模式的触发标记，如 `is_trend_reverse / is_pile / is_re_pile / is_n_bottom / is_flag_range`。

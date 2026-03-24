@@ -3,7 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from lotto_app.fetcher import load_history_records, parse_history_rows
+from lotto_app.fetcher import fetch_text, load_history_records, parse_history_rows
 
 
 SAMPLE_HTML = """
@@ -60,6 +60,33 @@ class ParseHistoryRowsTests(unittest.TestCase):
         self.assertEqual(2, len(rows))
         self.assertEqual("2026031", rows[0].serial)
         self.assertEqual("2026030", rows[1].serial)
+
+    def test_fetch_text_retries_after_timeout(self):
+        html_bytes = SAMPLE_HTML.encode("utf-8")
+        response = BytesIO(html_bytes)
+        response.__enter__ = lambda self=response: self
+        response.__exit__ = lambda exc_type, exc, tb: None
+        call_count = {"value": 0}
+
+        def fake_urlopen(request, timeout):
+            call_count["value"] += 1
+            if call_count["value"] < 3:
+                raise TimeoutError("timed out")
+            response.seek(0)
+            return response
+
+        with patch("lotto_app.fetcher.urlopen", side_effect=fake_urlopen), patch("lotto_app.fetcher.time.sleep"):
+            html = fetch_text("https://example.test/history?page=1", retries=3, retry_delay=0)
+
+        self.assertIn("table-history", html)
+        self.assertEqual(3, call_count["value"])
+
+    def test_load_history_records_wraps_timeout_as_runtime_error(self):
+        with patch("lotto_app.fetcher.fetch_text", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(RuntimeError) as ctx:
+                load_history_records("https://example.test/history?page={page}", draw_count=30)
+
+        self.assertIn("failed to fetch lottery data", str(ctx.exception))
 
 
 if __name__ == "__main__":

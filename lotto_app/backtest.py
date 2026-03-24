@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import defaultdict
 
 from .features import FeatureRow
 from .rules import RuleDefinition
@@ -66,34 +67,32 @@ def _split_rows(rows: list[FeatureRow], train_ratio: float) -> tuple[list[Featur
 
 
 def _rolling_metrics(
-    rows: list[FeatureRow],
-    rule: RuleDefinition,
-    label_name: str,
+    draw_stats: dict[int, tuple[int, int]],
+    rule_draw_stats: dict[int, tuple[int, int]],
     min_train_draws: int,
     step: int,
 ) -> tuple[int, int, float, float, float]:
-    if not rows:
+    if not draw_stats:
         return 0, 0, 0.0, 0.0, 0.0
 
-    draw_indices = sorted({row.draw_index for row in rows})
+    draw_indices = sorted(draw_stats)
     split_count = 0
     trigger_count = 0
     baseline_sum = 0.0
     rule_sum = 0.0
 
     for split_draw in range(min_train_draws, len(draw_indices) - 1, step):
-        train_rows = [row for row in rows if row.draw_index <= split_draw]
-        test_rows = [row for row in rows if row.draw_index == split_draw + 1]
-        baseline_rows = _valid_rows(test_rows, label_name)
-        rule_rows = _valid_rows([row for row in test_rows if rule.match(row)], label_name)
-        if not baseline_rows:
+        baseline_count, baseline_hits = draw_stats.get(split_draw + 1, (0, 0))
+        if baseline_count == 0:
             continue
 
         split_count += 1
-        baseline_sum += sum(getattr(row, label_name) for row in baseline_rows) / float(len(baseline_rows))
-        if rule_rows:
-            trigger_count += len(rule_rows)
-            rule_sum += sum(getattr(row, label_name) for row in rule_rows) / float(len(rule_rows))
+        baseline_sum += baseline_hits / float(baseline_count)
+
+        rule_count, rule_hits = rule_draw_stats.get(split_draw + 1, (0, 0))
+        if rule_count:
+            trigger_count += rule_count
+            rule_sum += rule_hits / float(rule_count)
         else:
             rule_sum += 0.0
 
@@ -103,6 +102,18 @@ def _rolling_metrics(
     baseline_rate = baseline_sum / split_count
     rule_rate = rule_sum / split_count
     return split_count, trigger_count, baseline_rate, rule_rate, rule_rate - baseline_rate
+
+
+def _aggregate_draw_label_stats(rows: list[FeatureRow], label_name: str) -> dict[int, tuple[int, int]]:
+    stats: dict[int, list[int]] = defaultdict(lambda: [0, 0])
+    for row in rows:
+        label = getattr(row, label_name)
+        if label < 0:
+            continue
+        item = stats[row.draw_index]
+        item[0] += 1
+        item[1] += label
+    return {draw_index: (count, hits) for draw_index, (count, hits) in stats.items()}
 
 
 def evaluate_rules(
@@ -123,21 +134,31 @@ def evaluate_rules(
     baseline_y3_test = _rate(test_rows, "y_3")
     baseline_y5_train = _rate(train_rows, "y_5")
     baseline_y5_test = _rate(test_rows, "y_5")
+    draw_stats_by_label = {
+        "y_1": _aggregate_draw_label_stats(rows, "y_1"),
+        "y_3": _aggregate_draw_label_stats(rows, "y_3"),
+        "y_5": _aggregate_draw_label_stats(rows, "y_5"),
+    }
 
     report_rows: list[RuleReportRow] = []
     for rule in rules:
         matched_all = [row for row in rows if rule.match(row)]
         matched_train = [row for row in train_rows if rule.match(row)]
         matched_test = [row for row in test_rows if rule.match(row)]
+        matched_stats_by_label = {
+            "y_1": _aggregate_draw_label_stats(matched_all, "y_1"),
+            "y_3": _aggregate_draw_label_stats(matched_all, "y_3"),
+            "y_5": _aggregate_draw_label_stats(matched_all, "y_5"),
+        }
 
         rolling_splits, rolling_trigger_count, rolling_baseline_y1, rolling_rule_y1, rolling_lift_y1 = _rolling_metrics(
-            rows, rule, "y_1", rolling_min_train_draws, rolling_step
+            draw_stats_by_label["y_1"], matched_stats_by_label["y_1"], rolling_min_train_draws, rolling_step
         )
         _, _, rolling_baseline_y3, rolling_rule_y3, rolling_lift_y3 = _rolling_metrics(
-            rows, rule, "y_3", rolling_min_train_draws, rolling_step
+            draw_stats_by_label["y_3"], matched_stats_by_label["y_3"], rolling_min_train_draws, rolling_step
         )
         _, _, rolling_baseline_y5, rolling_rule_y5, rolling_lift_y5 = _rolling_metrics(
-            rows, rule, "y_5", rolling_min_train_draws, rolling_step
+            draw_stats_by_label["y_5"], matched_stats_by_label["y_5"], rolling_min_train_draws, rolling_step
         )
 
         rule_y1_train = _rate(matched_train, "y_1")
