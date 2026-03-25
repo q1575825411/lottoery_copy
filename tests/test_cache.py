@@ -116,12 +116,32 @@ class CacheTests(unittest.TestCase):
             base_url="https://example.test/history?page={page}",
             rolling_min_train_draws=100,
             rolling_step=1,
+            rule_parameters={"omit_threshold": 10},
         )
         signature_b = compute_pipeline_signature(
             self.records + [DrawRecord(serial="2026000", draw_date="2026-03-20", red=[1, 3, 5, 7, 9, 11], blue=2)],
             base_url="https://example.test/history?page={page}",
             rolling_min_train_draws=100,
             rolling_step=1,
+            rule_parameters={"omit_threshold": 10},
+        )
+
+        self.assertNotEqual(signature_a, signature_b)
+
+    def test_pipeline_signature_changes_when_rule_parameters_change(self):
+        signature_a = compute_pipeline_signature(
+            self.records,
+            base_url="https://example.test/history?page={page}",
+            rolling_min_train_draws=100,
+            rolling_step=1,
+            rule_parameters={"omit_threshold": 10, "heat_score_threshold": 0.6},
+        )
+        signature_b = compute_pipeline_signature(
+            self.records,
+            base_url="https://example.test/history?page={page}",
+            rolling_min_train_draws=100,
+            rolling_step=1,
+            rule_parameters={"omit_threshold": 12, "heat_score_threshold": 0.6},
         )
 
         self.assertNotEqual(signature_a, signature_b)

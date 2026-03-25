@@ -11,6 +11,7 @@ from .rules import RuleDefinition
 class RuleReportRow:
     rule_name: str
     description: str
+    parameters: str
     trigger_count_total: int
     trigger_count_train: int
     trigger_count_test: int
@@ -172,6 +173,7 @@ def evaluate_rules(
             RuleReportRow(
                 rule_name=rule.name,
                 description=rule.description,
+                parameters=rule.parameter_summary(),
                 trigger_count_total=len(matched_all),
                 trigger_count_train=len(matched_train),
                 trigger_count_test=len(matched_test),

@@ -119,11 +119,13 @@ def compute_pipeline_signature(
     base_url: str,
     rolling_min_train_draws: int,
     rolling_step: int,
+    rule_parameters: dict[str, object] | None = None,
 ) -> str:
     payload = {
         "base_url": base_url,
         "rolling_min_train_draws": rolling_min_train_draws,
         "rolling_step": rolling_step,
+        "rule_parameters": rule_parameters or {},
         "records": [_record_to_dict(record) for record in records],
     }
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()

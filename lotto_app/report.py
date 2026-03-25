@@ -34,3 +34,7 @@ def export_model_predictions(path: Path, rows: list[ModelPredictionRow]) -> None
 
 def export_model_metrics(path: Path, rows: list[ModelMetricRow]) -> None:
     _write_csv(path, [row.as_dict() for row in rows])
+
+
+def export_rows(path: Path, rows: list[dict[str, object]]) -> None:
+    _write_csv(path, rows)

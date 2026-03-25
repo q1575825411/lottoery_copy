@@ -52,7 +52,9 @@ class ParseHistoryRowsTests(unittest.TestCase):
         def fake_fetch(url: str) -> str:
             if url in responses:
                 return responses[url]
-            raise HTTPError(url, 404, "Not Found", hdrs=None, fp=BytesIO(b""))
+            error = HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+            error.close()
+            raise error
 
         with patch("lotto_app.fetcher.fetch_text", side_effect=fake_fetch):
             rows = load_history_records("https://example.test/history?page={page}")
@@ -75,7 +77,11 @@ class ParseHistoryRowsTests(unittest.TestCase):
             response.seek(0)
             return response
 
-        with patch("lotto_app.fetcher.urlopen", side_effect=fake_urlopen), patch("lotto_app.fetcher.time.sleep"):
+        with (
+            patch("lotto_app.fetcher.urlopen", side_effect=fake_urlopen),
+            patch("lotto_app.fetcher.time.sleep"),
+            patch("lotto_app.fetcher.logger.warning"),
+        ):
             html = fetch_text("https://example.test/history?page=1", retries=3, retry_delay=0)
 
         self.assertIn("table-history", html)
