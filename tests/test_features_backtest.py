@@ -197,10 +197,34 @@ class FeatureAndBacktestTests(unittest.TestCase):
         self.assertEqual(1, logistic_metric.draw_count)
         self.assertGreaterEqual(random_metric.top_secondary_avg_hits, random_metric.top_primary_avg_hits)
 
+    def test_train_rank_and_backtest_reuses_ranker_between_retrains(self):
+        rows = build_feature_rows(self.records)
+        original_fit = train_rank_and_backtest.__globals__["LogisticBallRanker"].fit
+
+        with patch("lotto_app.models.LogisticBallRanker.fit", autospec=True, side_effect=original_fit) as fit_mock:
+            train_rank_and_backtest(
+                rows,
+                train_ratio=0.5,
+                target="red",
+                top_primary_k=6,
+                top_secondary_k=10,
+                rolling_min_train_draws=1,
+                rolling_step=1,
+                retrain_interval=2,
+                train_epochs=10,
+            )
+
+        self.assertEqual(2, fit_mock.call_count)
+
     def test_parse_args_rejects_invalid_rolling_step(self):
         with redirect_stderr(StringIO()):
             with self.assertRaises(SystemExit):
                 parse_args(["--rolling-step", "0"])
+
+    def test_parse_args_rejects_invalid_model_retrain_interval(self):
+        with redirect_stderr(StringIO()):
+            with self.assertRaises(SystemExit):
+                parse_args(["--model-retrain-interval", "0"])
 
     def test_parse_args_rejects_negative_full_history_draws(self):
         with redirect_stderr(StringIO()):
@@ -238,6 +262,12 @@ class FeatureAndBacktestTests(unittest.TestCase):
         self.assertEqual(3.0, args.strategy_ticket_cost)
         self.assertEqual(4, args.strategy_combo_ticket_count)
         self.assertEqual(2, args.strategy_blue_ticket_count)
+
+    def test_parse_args_accepts_model_speed_overrides(self):
+        args = parse_args(["--model-retrain-interval", "8", "--model-train-epochs", "60"])
+
+        self.assertEqual(8, args.model_retrain_interval)
+        self.assertEqual(60, args.model_train_epochs)
 
     def test_parse_args_accepts_pattern_threshold_overrides(self):
         args = parse_args(["--trend-reverse-min-omit", "19", "--pile-long-min", "16", "--flag-range-min-repeat", "3"])
@@ -445,6 +475,8 @@ class FeatureAndBacktestTests(unittest.TestCase):
             strategy_blue_ticket_count=3,
             rolling_min_train_draws=100,
             rolling_step=1,
+            model_retrain_interval=5,
+            model_train_epochs=120,
             rule_config=None,
             omit_threshold=10,
             gap_ratio_threshold=1.5,

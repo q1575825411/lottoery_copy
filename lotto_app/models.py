@@ -19,6 +19,8 @@ def _rolling_rank_rows(
     *,
     min_train_draws: int,
     step: int,
+    retrain_interval: int,
+    train_epochs: int,
 ) -> list[ModelPredictionRow]:
     if not rows:
         return []
@@ -29,16 +31,22 @@ def _rolling_rank_rows(
         return []
 
     predictions: list[ModelPredictionRow] = []
+    ranker: LogisticBallRanker | None = None
+    last_fit_position = -1
     for test_position in range(min_train_draws, len(draw_indices), step):
         test_draw_index = draw_indices[test_position]
-        train_draw_indices = set(draw_indices[:test_position])
-        train_rows = [row for row in valid_rows if row.draw_index in train_draw_indices]
         test_rows = [row for row in valid_rows if row.draw_index == test_draw_index]
-        if not train_rows or not test_rows:
+        should_retrain = ranker is None or (test_position - last_fit_position) >= retrain_interval
+        if should_retrain:
+            train_draw_indices = set(draw_indices[:test_position])
+            train_rows = [row for row in valid_rows if row.draw_index in train_draw_indices]
+            if not train_rows:
+                continue
+            ranker = LogisticBallRanker(epochs=train_epochs)
+            ranker.fit(train_rows, label_name="y_1")
+            last_fit_position = test_position
+        if ranker is None or not test_rows:
             continue
-
-        ranker = LogisticBallRanker()
-        ranker.fit(train_rows, label_name="y_1")
         predictions.extend(rank_rows(test_rows, ranker))
 
     return sorted(predictions, key=lambda row: (row.draw_index, row.rank_y1, row.ball))
@@ -53,6 +61,8 @@ def train_and_rank(
     top_secondary_k: int = 10,
     rolling_min_train_draws: int | None = None,
     rolling_step: int = 1,
+    retrain_interval: int = 5,
+    train_epochs: int = 120,
 ) -> tuple[list[ModelPredictionRow], list[ModelMetricRow]]:
     latest_predictions, _, metric_rows = train_rank_and_backtest(
         rows,
@@ -62,6 +72,8 @@ def train_and_rank(
         top_secondary_k=top_secondary_k,
         rolling_min_train_draws=rolling_min_train_draws,
         rolling_step=rolling_step,
+        retrain_interval=retrain_interval,
+        train_epochs=train_epochs,
     )
     return latest_predictions, metric_rows
 
@@ -75,6 +87,8 @@ def train_rank_and_backtest(
     top_secondary_k: int = 10,
     rolling_min_train_draws: int | None = None,
     rolling_step: int = 1,
+    retrain_interval: int = 5,
+    train_epochs: int = 120,
 ) -> tuple[list[ModelPredictionRow], list[ModelPredictionRow], list[ModelMetricRow]]:
     trainable_rows = [row for row in rows if row.y_1 >= 0]
     if not trainable_rows:
@@ -83,7 +97,7 @@ def train_rank_and_backtest(
         latest_predictions = rank_rows_by_score(latest_rows, score_by_heat) if latest_rows else []
         return latest_predictions, [], [metrics([], "rolling", "logistic", target=target, top_primary_k=top_primary_k, top_secondary_k=top_secondary_k)]
 
-    ranker = LogisticBallRanker()
+    ranker = LogisticBallRanker(epochs=train_epochs)
     ranker.fit(trainable_rows, label_name="y_1")
     latest_draw_index = max(row.draw_index for row in rows)
     latest_rows = [row for row in rows if row.draw_index == latest_draw_index]
@@ -94,7 +108,13 @@ def train_rank_and_backtest(
         min_train_draws = _default_rolling_min_train_draws(rows, train_ratio)
     min_train_draws = max(1, min_train_draws)
 
-    rolling_predictions = _rolling_rank_rows(rows, min_train_draws=min_train_draws, step=max(1, rolling_step))
+    rolling_predictions = _rolling_rank_rows(
+        rows,
+        min_train_draws=min_train_draws,
+        step=max(1, rolling_step),
+        retrain_interval=max(1, retrain_interval),
+        train_epochs=train_epochs,
+    )
     rolling_draw_indices = {row.draw_index for row in rolling_predictions}
     evaluation_rows = [row for row in trainable_rows if row.draw_index in rolling_draw_indices]
 

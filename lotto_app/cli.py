@@ -57,6 +57,8 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--strategy-blue-ticket-count", type=int, default=3, help="How many top blue candidates to pair with each red combination in the fixed-ticket strategy. Default: %(default)s")
     parser.add_argument("--rolling-min-train-draws", type=int, default=100, help="Minimum history size before rolling evaluation starts. Default: %(default)s")
     parser.add_argument("--rolling-step", type=int, default=1, help="Rolling evaluation step size in draws. Default: %(default)s")
+    parser.add_argument("--model-retrain-interval", type=int, default=5, help="How many draws to reuse the fitted ranking model before retraining during rolling backtests. Default: %(default)s")
+    parser.add_argument("--model-train-epochs", type=int, default=120, help="Training epochs for the logistic ranking model. Lower values run faster. Default: %(default)s")
     parser.add_argument("--rule-config", help="Path to a JSON rule config file. Supports a single config object, a list, or an object with a 'configs' list.")
     parser.add_argument("--omit-threshold", type=int, default=10, help="Threshold for the deep omit rule. Default: %(default)s")
     parser.add_argument("--gap-ratio-threshold", type=float, default=1.5, help="Threshold for the high gap ratio rule. Default: %(default)s")
@@ -85,6 +87,10 @@ def parse_args(argv: list[str] | None = None):
         parser.error("--rolling-min-train-draws must be greater than 0.")
     if args.rolling_step <= 0:
         parser.error("--rolling-step must be greater than 0.")
+    if args.model_retrain_interval <= 0:
+        parser.error("--model-retrain-interval must be greater than 0.")
+    if args.model_train_epochs <= 0:
+        parser.error("--model-train-epochs must be greater than 0.")
     if args.omit_threshold < 0:
         parser.error("--omit-threshold must be greater than or equal to 0.")
     if args.gap_ratio_threshold <= 0:
@@ -298,6 +304,8 @@ def _build_phase_one_outputs(
         top_secondary_k=10,
         rolling_min_train_draws=args.rolling_min_train_draws,
         rolling_step=args.rolling_step,
+        retrain_interval=args.model_retrain_interval,
+        train_epochs=args.model_train_epochs,
     )
     blue_feature_rows = build_blue_feature_rows(records)
     blue_model_ranking_rows, blue_backtest_ranking_rows, blue_model_metric_rows = train_rank_and_backtest(
@@ -307,6 +315,8 @@ def _build_phase_one_outputs(
         top_secondary_k=3,
         rolling_min_train_draws=args.rolling_min_train_draws,
         rolling_step=args.rolling_step,
+        retrain_interval=args.model_retrain_interval,
+        train_epochs=args.model_train_epochs,
     )
     logger.info("completed model training and ranking in %.2fs", time.perf_counter() - stage_start)
 
@@ -379,6 +389,8 @@ def main() -> int:
             rule_parameters={
                 "rule_configs": [{"name": name, **config.as_dict()} for name, config in load_rule_config_entries(args)],
                 "candidate_combo_limit": args.candidate_combo_limit,
+                "model_retrain_interval": args.model_retrain_interval,
+                "model_train_epochs": args.model_train_epochs,
                 "strategy_start_bankroll": args.strategy_start_bankroll,
                 "strategy_ticket_cost": args.strategy_ticket_cost,
                 "strategy_combo_ticket_count": args.strategy_combo_ticket_count,
