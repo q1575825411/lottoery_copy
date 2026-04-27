@@ -2,3 +2,14 @@
 __pycache__/
 *.pyc
 data/*.tmp
+data/cache/history_cache.json
+data/cache/pipeline_state.json
+data/output/*.csv
+data/output/*.xlsx
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
+.codex_tmp/
+.test_tmp/

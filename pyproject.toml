@@ -4,6 +4,12 @@ version = "0.1.0"
 description = "SSQ history fetcher and Excel analyzer"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "openpyxl>=3.1",
+]
+
+[project.scripts]
+lotto = "lotto_app.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

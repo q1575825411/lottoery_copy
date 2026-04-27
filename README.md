@@ -8,16 +8,23 @@ Using Gail Howard's methord to count the double color balls.
 
 ## Python 3
 
-当前版本已重构为 Python 3 脚本，默认将结果写入项目内的 `data/data.xlsx`，并改为从东方财富彩票历史页抓取双色球数据。
+当前版本已重构为 Python 3 脚本，默认将结果写入项目内的 `data/output/data.xlsx`，并改为从东方财富彩票历史页抓取双色球数据。
 
 当前项目结构：
 
 ```text
 .
 ├── data/
-│   ├── data.xlsx
-│   ├── history_cache.json
-│   └── pipeline_state.json
+│   ├── cache/
+│   │   ├── history_cache.json
+│   │   └── pipeline_state.json
+│   ├── input/
+│   └── output/
+│       ├── data.xlsx
+│       ├── sample_features.csv
+│       └── ...
+├── docs/
+│   └── improvement-notes.md
 ├── lotto_app/
 │   ├── cli.py
 │   ├── fetcher.py
@@ -44,24 +51,27 @@ Using Gail Howard's methord to count the double color balls.
 
 约定：
 
-- `data/` 存放运行输出和后续数据文件
+- `data/cache/` 存放抓取缓存和流水线状态
+- `data/input/` 预留给规则配置和手工输入文件
+- `data/output/` 存放 Excel 与各类 csv 导出
 - `lotto_app/` 存放核心业务代码
 - `tests/` 存放最小回归测试
 - `scripts/` 存放执行脚本
+- `docs/` 存放补充说明和历史整理文档
 - 根目录 `run.sh` 只是兼容入口，实际转发到 `scripts/run.sh`
-- `data/history_cache.json` 缓存历史开奖数据，首次全量抓取，后续仅同步增量
-- `data/pipeline_state.json` 记录第一阶段导出的输入签名，数据和参数未变化时跳过重算
-- `data/sample_features.csv` 是第一阶段生成的特征样本表
-- `data/rule_effectiveness.csv` 是第一阶段生成的规则有效性报表
-- `data/rule_grid_report.csv` 是多套规则参数的横向比较报表
-- `data/rule_grid_summary.csv` 是多套规则参数的排序摘要报表
-- `data/model_ranking.csv` 是基于简单 Logistic Regression 的最新一期号码排序结果
-- `data/model_metrics.csv` 是模型在测试集上的 Top-K 评估结果
-- `data/model_blue_ranking.csv` 是蓝球模型对最新一期的排序结果
-- `data/model_blue_metrics.csv` 是蓝球模型在测试集上的评估结果
-- `data/candidate_pools.csv` 是基于最新红蓝排序生成的候选池摘要
-- `data/candidate_combinations.csv` 是加上基础约束后的红球候选组合
-- `data/strategy_backtest.csv` 是基于测试期历史排序回放出来的策略回测摘要
+- `data/cache/history_cache.json` 缓存历史开奖数据，首次全量抓取，后续仅同步增量
+- `data/cache/pipeline_state.json` 记录第一阶段导出的输入签名，数据和参数未变化时跳过重算
+- `data/output/sample_features.csv` 是第一阶段生成的特征样本表
+- `data/output/rule_effectiveness.csv` 是第一阶段生成的规则有效性报表
+- `data/output/rule_grid_report.csv` 是多套规则参数的横向比较报表
+- `data/output/rule_grid_summary.csv` 是多套规则参数的排序摘要报表
+- `data/output/model_ranking.csv` 是基于简单 Logistic Regression 的最新一期号码排序结果
+- `data/output/model_metrics.csv` 是模型在测试集上的 Top-K 评估结果
+- `data/output/model_blue_ranking.csv` 是蓝球模型对最新一期的排序结果
+- `data/output/model_blue_metrics.csv` 是蓝球模型在测试集上的评估结果
+- `data/output/candidate_pools.csv` 是基于最新红蓝排序生成的候选池摘要
+- `data/output/candidate_combinations.csv` 是加上基础约束后的红球候选组合
+- `data/output/strategy_backtest.csv` 是基于测试期历史排序回放出来的策略回测摘要
 - `lotto_app/patterns.py` 将趋势逆转、层叠、反向层叠、n倍底、旗式排列抽成可复用模式模块
 
 首次初始化：
@@ -82,7 +92,7 @@ python lotto.py
 可选参数：
 
 ```bash
-python lotto.py --xlsx ./data/data.xlsx --draws 100
+python lotto.py --xlsx ./data/output/data.xlsx --draws 100
 ```
 
 规则阈值调参示例：
@@ -120,15 +130,15 @@ python lotto.py \
 ```
 
 ```bash
-python lotto.py --rule-config ./data/rule_configs.json
+python lotto.py --rule-config ./data/input/rule_configs.json
 ```
 
 如需自定义批量对比摘要输出路径：
 
 ```bash
 python lotto.py \
-  --rule-config ./data/rule_configs.json \
-  --rule-grid-summary-csv ./data/rule_grid_summary.csv
+  --rule-config ./data/input/rule_configs.json \
+  --rule-grid-summary-csv ./data/output/rule_grid_summary.csv
 ```
 
 如需直接在命令行生成参数网格：
@@ -144,15 +154,15 @@ python lotto.py \
 
 ```bash
 python lotto.py \
-  --sample-csv ./data/sample_features.csv \
-  --rule-report-csv ./data/rule_effectiveness.csv \
-  --model-ranking-csv ./data/model_ranking.csv \
-  --model-metrics-csv ./data/model_metrics.csv \
-  --blue-model-ranking-csv ./data/model_blue_ranking.csv \
-  --blue-model-metrics-csv ./data/model_blue_metrics.csv \
-  --candidate-pools-csv ./data/candidate_pools.csv \
-  --candidate-combinations-csv ./data/candidate_combinations.csv \
-  --strategy-backtest-csv ./data/strategy_backtest.csv
+  --sample-csv ./data/output/sample_features.csv \
+  --rule-report-csv ./data/output/rule_effectiveness.csv \
+  --model-ranking-csv ./data/output/model_ranking.csv \
+  --model-metrics-csv ./data/output/model_metrics.csv \
+  --blue-model-ranking-csv ./data/output/model_blue_ranking.csv \
+  --blue-model-metrics-csv ./data/output/model_blue_metrics.csv \
+  --candidate-pools-csv ./data/output/candidate_pools.csv \
+  --candidate-combinations-csv ./data/output/candidate_combinations.csv \
+  --strategy-backtest-csv ./data/output/strategy_backtest.csv
 ```
 
 固定注数策略示例：
@@ -204,11 +214,11 @@ python3 -m unittest discover -s tests
 - `--draws` 必须大于等于 `100`，因为现有统计逻辑固定依赖最近 100 期数据。
 - `--full-history-draws 0` 表示特征和回测使用全量历史；非 0 时使用指定条数。
 - 数据抓取现在依赖东方财富的历史开奖页；如果上游页面结构变化，脚本会直接报错退出。
-- 历史开奖会缓存到 `data/history_cache.json`；首次运行全量抓取，后续运行只抓取新期次。
+- 历史开奖会缓存到 `data/cache/history_cache.json`；首次运行全量抓取，后续运行只抓取新期次。
 - 第一阶段导出会根据缓存数据和滚动参数计算输入签名；如果历史数据和参数都没变化，则直接复用已有 csv，不重复回测和训练。
 - 规则阈值参数也会写入第一阶段输入签名；调整阈值后会自动重建 `sample_features.csv / rule_effectiveness.csv / model_ranking.csv / model_metrics.csv`。
 - `--rule-config` 中的多套参数也会进入第一阶段输入签名；配置集变化后会自动重建对比报表。
-- `data.xlsx` 也会根据最近 `--draws` 期数据计算签名；最近期数据未变化时直接复用已有工作簿，不重复生成。
+- `data/output/data.xlsx` 也会根据最近 `--draws` 期数据计算签名；最近期数据未变化时直接复用已有工作簿，不重复生成。
 - Excel 中新增了 `原始数据` 工作表，用于保存最近 100 期原始开奖明细，便于人工核对。
 - `sample_features.csv` 采用“每期、每号一行”的结构，并包含 `y_1 / y_3 / y_5` 标签。
 - `sample_features.csv` 同时包含原有经验模式的触发标记，如 `is_trend_reverse / is_pile / is_re_pile / is_n_bottom / is_flag_range`。

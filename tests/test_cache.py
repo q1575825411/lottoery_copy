@@ -1,5 +1,8 @@
+from contextlib import contextmanager
+import shutil
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +18,17 @@ from lotto_app.cache import (
 from lotto_app.fetcher import DrawRecord
 
 
+@contextmanager
+def workspace_temp_dir():
+    root = Path(__file__).resolve().parents[1] / ".test_tmp"
+    path = root / uuid.uuid4().hex
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 class CacheTests(unittest.TestCase):
     def setUp(self):
         self.records = [
@@ -23,8 +37,8 @@ class CacheTests(unittest.TestCase):
         ]
 
     def test_history_cache_round_trip(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cache_path = Path(temp_dir) / "history_cache.json"
+        with workspace_temp_dir() as temp_dir:
+            cache_path = temp_dir / "history_cache.json"
 
             save_history_cache(cache_path, "https://example.test/history?page={page}", self.records)
             loaded = load_history_cache(cache_path, "https://example.test/history?page={page}")
@@ -32,8 +46,8 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(self.records, loaded)
 
     def test_sync_history_cache_initializes_from_full_fetch(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cache_path = Path(temp_dir) / "history_cache.json"
+        with workspace_temp_dir() as temp_dir:
+            cache_path = temp_dir / "history_cache.json"
             with patch("lotto_app.cache.load_history_records", return_value=self.records) as load_mock:
                 loaded, updated = sync_history_cache("https://example.test/history?page={page}", cache_path)
 
@@ -90,8 +104,8 @@ class CacheTests(unittest.TestCase):
           </tbody>
         </table>
         """
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cache_path = Path(temp_dir) / "history_cache.json"
+        with workspace_temp_dir() as temp_dir:
+            cache_path = temp_dir / "history_cache.json"
             save_history_cache(cache_path, "https://example.test/history?page={page}", self.records)
 
             with patch("lotto_app.cache.fetch_text", return_value=html):
@@ -102,8 +116,8 @@ class CacheTests(unittest.TestCase):
 
     def test_pipeline_state_round_trip(self):
         state = {"pipeline_signature": "abc123", "record_count": 2}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            state_path = Path(temp_dir) / "pipeline_state.json"
+        with workspace_temp_dir() as temp_dir:
+            state_path = temp_dir / "pipeline_state.json"
 
             save_pipeline_state(state_path, state)
             loaded = load_pipeline_state(state_path)

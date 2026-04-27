@@ -2,24 +2,33 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 import json
-import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+import shutil
 from types import SimpleNamespace
 from unittest.mock import patch
+import uuid
 
-from lotto_app.cli import (
-    build_candidate_combination_rows,
-    build_candidate_pool_rows,
-    build_rule_grid_summary_rows,
-    build_strategy_backtest_rows,
-    load_rule_config_entries,
-    parse_args,
-)
+from lotto_app.config import parse_args
 from lotto_app.backtest import evaluate_rules
 from lotto_app.features import FeatureRow, build_blue_feature_rows, build_feature_rows
 from lotto_app.fetcher import DrawRecord
 from lotto_app.models import train_and_rank, train_rank_and_backtest
+from lotto_app.pipeline import load_rule_config_entries
+from lotto_app.rule_grid import build_rule_grid_summary_rows
 from lotto_app.rules import LambdaRule, RuleConfig, default_rules
+from lotto_app.strategy import build_candidate_combination_rows, build_candidate_pool_rows, build_strategy_backtest_rows
+
+
+@contextmanager
+def workspace_temp_dir():
+    root = Path(__file__).resolve().parents[1] / ".test_tmp"
+    path = root / uuid.uuid4().hex
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 class FeatureAndBacktestTests(unittest.TestCase):
@@ -288,8 +297,8 @@ class FeatureAndBacktestTests(unittest.TestCase):
                 {"name": "aggressive", "heat_score_threshold": 0.8, "gap_cv_threshold": 0.9, "trend_reverse_min_omit": 19},
             ]
         }
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "rules.json"
+        with workspace_temp_dir() as temp_dir:
+            config_path = temp_dir / "rules.json"
             config_path.write_text(json.dumps(payload), encoding="utf-8")
 
             entries = load_rule_config_entries(parse_args(["--rule-config", str(config_path)]))
@@ -302,8 +311,8 @@ class FeatureAndBacktestTests(unittest.TestCase):
 
     def test_load_rule_config_entries_rejects_unsupported_recent_window(self):
         payload = {"configs": [{"name": "bad", "inactive_recent_window": 7}]}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "rules.json"
+        with workspace_temp_dir() as temp_dir:
+            config_path = temp_dir / "rules.json"
             config_path.write_text(json.dumps(payload), encoding="utf-8")
 
             with self.assertRaises(RuntimeError):
@@ -499,8 +508,8 @@ class FeatureAndBacktestTests(unittest.TestCase):
         )
 
         records = self.records * 30
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workbook_path = Path(temp_dir) / "data.xlsx"
+        with workspace_temp_dir() as temp_dir:
+            workbook_path = temp_dir / "data.xlsx"
             workbook_path.write_text("placeholder", encoding="utf-8")
             args.xlsx = str(workbook_path)
 
@@ -509,17 +518,17 @@ class FeatureAndBacktestTests(unittest.TestCase):
                 patch("lotto_app.cli.configure_logging"),
                 patch("lotto_app.cli.ensure_excel_dependencies", return_value=object()),
                 patch("lotto_app.cli.sync_history_cache", return_value=(records, True)),
-                patch("lotto_app.cli.compute_pipeline_signature", return_value="pipeline-new"),
+                patch("lotto_app.cli.build_pipeline_signature", return_value="pipeline-new"),
                 patch("lotto_app.cli.compute_workbook_signature", return_value="workbook-same"),
-                patch("lotto_app.cli.load_pipeline_state", return_value={"pipeline_signature": "pipeline-old", "workbook_signature": "workbook-same"}),
-                patch("lotto_app.cli._build_phase_one_outputs"),
-                patch("lotto_app.cli.save_pipeline_state") as save_state_mock,
+                patch("lotto_app.cli.load_existing_pipeline_state", return_value={"pipeline_signature": "pipeline-old", "workbook_signature": "workbook-same"}),
+                patch("lotto_app.cli.build_phase_one_outputs"),
+                patch("lotto_app.cli.persist_pipeline_state") as save_state_mock,
+                patch("lotto_app.cli.rebuild_workbook_if_needed"),
             ):
                 self.assertEqual(0, cli.main())
 
-        first_payload = save_state_mock.call_args_list[0].args[1]
-        self.assertEqual("workbook-same", first_payload["workbook_signature"])
-        self.assertEqual("pipeline-new", first_payload["pipeline_signature"])
+        self.assertEqual(1, save_state_mock.call_count)
+        self.assertEqual("pipeline-new", save_state_mock.call_args.args[2])
 
 
 if __name__ == "__main__":
