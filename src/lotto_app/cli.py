@@ -28,7 +28,7 @@ def main() -> int:
         args = parse_args()
         configure_logging(args.log_level)
         deps = ensure_excel_dependencies()
-        data_dir = Path(__file__).resolve().parents[1] / "data"
+        data_dir = Path(__file__).resolve().parents[2] / "data"
         history_cache_path = data_dir / "cache" / "history_cache.json"
         pipeline_state_path = data_dir / "cache" / "pipeline_state.json"
         sample_csv_path = Path(args.sample_csv).expanduser().resolve()

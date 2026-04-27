@@ -365,7 +365,7 @@
 ## 建议拆成这样
 
 ```python
-lotto_app/
+src/lotto_app/
   data/
     fetcher.py
     loader.py

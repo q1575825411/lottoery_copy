@@ -19,7 +19,7 @@ def ensure_excel_dependencies() -> ExcelDeps:
         from openpyxl.styles import Font
     except ImportError as exc:
         raise RuntimeError(
-            "missing dependency: %s. Install them with 'python3 -m pip install -r requirements.txt'." % exc.name
+            "missing dependency: %s. Install them with 'python -m pip install -e .'." % exc.name
         ) from exc
 
     return ExcelDeps(

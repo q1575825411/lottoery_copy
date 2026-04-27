@@ -13,16 +13,16 @@ fi
 source "$VENV_DIR/bin/activate"
 
 ensure_dependencies() {
-  if ! "$PYTHON_BIN" -c "import openpyxl" >/dev/null 2>&1; then
-    "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/requirements.txt"
+  if ! "$PYTHON_BIN" -c "import openpyxl, lotto_app" >/dev/null 2>&1; then
+    "$PYTHON_BIN" -m pip install -e "$ROOT_DIR"
   fi
 }
 
 if [[ "${1:-}" == "--sync-deps" ]]; then
   shift
-  "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/requirements.txt"
+  "$PYTHON_BIN" -m pip install -e "$ROOT_DIR"
 else
   ensure_dependencies
 fi
 
-"$PYTHON_BIN" "$ROOT_DIR/lotto.py" "$@"
+"$PYTHON_BIN" -m lotto_app.cli "$@"

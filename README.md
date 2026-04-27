@@ -10,10 +10,43 @@ Using Gail Howard's methord to count the double color balls.
 
 当前版本已重构为 Python 3 脚本，默认将结果写入项目内的 `data/output/data.xlsx`，并改为从东方财富彩票历史页抓取双色球数据。
 
+## 云端运行
+
+这个项目不会把本地 `.venv/` 提交到仓库。别人下载代码后，需要在自己的机器或云端环境里自行创建 Python 环境并安装项目依赖。
+
+推荐的最小运行步骤：
+
+```bash
+git clone <your-repo-url>
+cd lottoery_copy
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+python -m unittest discover -s tests -t .
+python -m lotto_app.cli
+```
+
+如果是全新云端机器，通常只需要确认三件事：
+
+- Python 版本不低于 `3.11`
+- 当前用户对项目目录有读写权限
+- 机器能够访问东方财富历史开奖页面
+
+如果你不想手动执行这些步骤，也可以直接运行：
+
+```bash
+./tools/run.sh
+```
+
+这个脚本会自动创建项目内 `.venv/`，并在缺依赖时执行 `pip install -e .`。
+
 当前项目结构：
 
 ```text
 .
+├── src/
+│   └── lotto_app/
 ├── data/
 │   ├── cache/
 │   │   ├── history_cache.json
@@ -23,42 +56,25 @@ Using Gail Howard's methord to count the double color balls.
 │       ├── data.xlsx
 │       ├── sample_features.csv
 │       └── ...
+├── tests/
 ├── docs/
 │   └── improvement-notes.md
-├── lotto_app/
-│   ├── cli.py
-│   ├── fetcher.py
-│   ├── analysis.py
-│   ├── features.py
-│   ├── rules.py
-│   ├── backtest.py
-│   ├── report.py
-│   ├── patterns.py
-│   ├── excel.py
-│   └── state.py
-├── tests/
-│   ├── test_fetcher.py
-│   ├── test_analysis.py
-│   └── test_features_backtest.py
-├── scripts/
+├── tools/
 │   └── run.sh
-├── lotto.py
 ├── pyproject.toml
-├── requirements.txt
-├── run.sh
+├── LICENSE
 └── README.md
 ```
 
 约定：
 
+- `src/lotto_app/` 存放核心业务代码
 - `data/cache/` 存放抓取缓存和流水线状态
 - `data/input/` 预留给规则配置和手工输入文件
 - `data/output/` 存放 Excel 与各类 csv 导出
-- `lotto_app/` 存放核心业务代码
 - `tests/` 存放最小回归测试
-- `scripts/` 存放执行脚本
 - `docs/` 存放补充说明和历史整理文档
-- 根目录 `run.sh` 只是兼容入口，实际转发到 `scripts/run.sh`
+- `tools/` 存放项目脚本
 - `data/cache/history_cache.json` 缓存历史开奖数据，首次全量抓取，后续仅同步增量
 - `data/cache/pipeline_state.json` 记录第一阶段导出的输入签名，数据和参数未变化时跳过重算
 - `data/output/sample_features.csv` 是第一阶段生成的特征样本表
@@ -72,33 +88,33 @@ Using Gail Howard's methord to count the double color balls.
 - `data/output/candidate_pools.csv` 是基于最新红蓝排序生成的候选池摘要
 - `data/output/candidate_combinations.csv` 是加上基础约束后的红球候选组合
 - `data/output/strategy_backtest.csv` 是基于测试期历史排序回放出来的策略回测摘要
-- `lotto_app/patterns.py` 将趋势逆转、层叠、反向层叠、n倍底、旗式排列抽成可复用模式模块
+- `src/lotto_app/patterns.py` 将趋势逆转、层叠、反向层叠、n倍底、旗式排列抽成可复用模式模块
 
 首次初始化：
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
 日常运行：
 
 ```bash
-source .venv/bin/activate
-python lotto.py
+python -m lotto_app.cli
 ```
 
 可选参数：
 
 ```bash
-python lotto.py --xlsx ./data/output/data.xlsx --draws 100
+python -m lotto_app.cli --xlsx ./data/output/data.xlsx --draws 100
 ```
 
 规则阈值调参示例：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --omit-threshold 12 \
   --gap-ratio-threshold 1.8 \
   --heat-score-threshold 0.75 \
@@ -108,7 +124,7 @@ python lotto.py \
 模式阈值调参示例：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --trend-reverse-min-omit 19 \
   --pile-long-min 16 \
   --pile-mid-min 9 \
@@ -130,13 +146,13 @@ python lotto.py \
 ```
 
 ```bash
-python lotto.py --rule-config ./data/input/rule_configs.json
+python -m lotto_app.cli --rule-config ./data/input/rule_configs.json
 ```
 
 如需自定义批量对比摘要输出路径：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --rule-config ./data/input/rule_configs.json \
   --rule-grid-summary-csv ./data/output/rule_grid_summary.csv
 ```
@@ -144,7 +160,7 @@ python lotto.py \
 如需直接在命令行生成参数网格：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --sweep-omit-thresholds 10,12,14 \
   --sweep-heat-score-thresholds 0.6,0.75 \
   --sweep-gap-cv-thresholds 0.5,0.8
@@ -153,7 +169,7 @@ python lotto.py \
 第一阶段额外导出：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --sample-csv ./data/output/sample_features.csv \
   --rule-report-csv ./data/output/rule_effectiveness.csv \
   --model-ranking-csv ./data/output/model_ranking.csv \
@@ -168,7 +184,7 @@ python lotto.py \
 固定注数策略示例：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --candidate-combo-limit 20 \
   --strategy-start-bankroll 1000 \
   --strategy-ticket-cost 2 \
@@ -179,7 +195,7 @@ python lotto.py \
 启用滚动时序回测参数：
 
 ```bash
-python lotto.py \
+python -m lotto_app.cli \
   --rolling-min-train-draws 100 \
   --rolling-step 1
 ```
@@ -187,26 +203,32 @@ python lotto.py \
 如果你不想每次手动激活虚拟环境，可以直接使用项目内脚本：
 
 ```bash
-./run.sh
+./tools/run.sh
 ```
 
 这个脚本会：
 
 - 自动创建 `.venv`
 - 自动激活虚拟环境
-- 缺少依赖时自动安装 `requirements.txt`
-- 运行 `lotto.py`
+- 缺少依赖时自动执行 `pip install -e .`
+- 运行 `python -m lotto_app.cli`
+
+常见问题：
+
+- 仓库里没有 `.venv/` 是正常的，它属于本地环境，不属于源码。
+- 云端机器第一次运行前，必须先执行 `python -m pip install -e .`，否则 `lotto_app` 包不会被安装到当前环境。
+- 如果抓取阶段报网络错误，通常不是项目结构问题，而是当前机器无法访问上游开奖页面。
 
 运行测试：
 
 ```bash
-python3 -m unittest discover -s tests
+python -m unittest discover -s tests -t .
 ```
 
 如果你改了依赖并希望强制重新同步，可以执行：
 
 ```bash
-./run.sh --sync-deps
+./tools/run.sh --sync-deps
 ```
 
 说明：

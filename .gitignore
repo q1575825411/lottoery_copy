@@ -9,6 +9,10 @@ data/output/*.xlsx
 .pytest_cache/
 .coverage
 htmlcov/
+.eggs/
+*.egg-info/
+build/
+dist/
 .vscode/
 .idea/
 .codex_tmp/
